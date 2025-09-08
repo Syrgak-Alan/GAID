@@ -371,8 +371,20 @@ def recognize_showplace_with_nearby(
         "- First, recognize the landmark from the image.\n"
         "- Then, compare with the provided nearby showplaces.\n"
         "- If one of the nearby names matches or strongly corresponds to the image, select it.\n"
-        "- If none match, respond with your best guess and note uncertainty.\n"
-        "- Respond in a single concise line: '<Landmark Name> - <City/Country if known>' and optionally a short note if disambiguation was used."
+        "- If none match, respond with your best guess and note uncertainty.\n" \
+
+        """-  Return ONLY a single JSON object matching this schema (and nothing else):
+
+        {
+          "attraction": 
+            "name": string,
+            "address": string,
+            "latitude": number,
+            "longitude": number,
+        }
+        
+         """
+
     )
 
     try:
