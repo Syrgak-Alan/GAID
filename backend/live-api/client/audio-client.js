@@ -43,6 +43,26 @@ class AudioClient {
         // Keep track of audio contexts created
         window.existingAudioContexts = window.existingAudioContexts || [];
     }
+
+    // Send plain text to the server for narration. If verbatim=true, the server will
+    // prepend a hint to read it exactly.
+    sendText(text, { verbatim = true } = {}) {
+        try {
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                console.warn('WebSocket not open; cannot send text');
+                return false;
+            }
+            const payload = {
+                type: verbatim ? 'speak_text' : 'text',
+                data: text || ''
+            };
+            this.ws.send(JSON.stringify(payload));
+            return true;
+        } catch (e) {
+            console.error('Failed to send text:', e);
+            return false;
+        }
+    }
     
     // Connect to the WebSocket server
     async connect() {
