@@ -3,7 +3,7 @@ import websockets
 
 print(os.getcwd())  # should end with .../your_project
 
-# In test_script.ipynb — run from your project root
+# In test_script.ipynb ï¿½ run from your project root
 from gAIde.story_teller.generate_story_func import generate_story_sync
 from gAIde.story_teller.config import PLACE, USER_PROFILE
 
@@ -43,7 +43,7 @@ async def speak_via_live_api(text: str, ws_url: str = "ws://localhost:8765") -> 
 
 # Generate story text
 story = generate_story_sync(
-    "C:\\Users\\Alan\\Desktop\\turm.jpeg",
+    "/Volumes/Crucial_X6/GCP_hackathon/GAID/backend/image.png",
     USER_PROFILE
 )
 print(story)
