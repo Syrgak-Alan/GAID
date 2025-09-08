@@ -25,6 +25,14 @@ async def generate_facts(
 ) -> Dict[str, Any]:
     """Run your agent once and return the JSON as a Python dict. No human prompt."""
     place = recognize_showplace_auto(image)
+    print("This is the place:",place)
+
+    # strip code fences and parse
+    clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", place.strip(), flags=re.DOTALL)
+    place = json.loads(clean)
+
+    print(place)
+
     # raise NotImplementedError(f"This is the place: {place}")
     # print("Recognized place:", place)
     agent = make_agent(place, profile)

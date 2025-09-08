@@ -219,8 +219,16 @@ def recognize_showplace(image_path: str, locale: str = "en") -> str:
     prompt = (
         "You are a landmark recognition assistant for travelers. "
         "Given the image, identify the most likely landmark or showplace. "
-        "Respond concisely with the landmark name and city/country if known. "
-        f"Use language: {locale}. If uncertain, provide best guess."
+        """-  Return ONLY a single JSON object matching this schema (and nothing else):
+
+        {
+            "name": string,
+            "address": string,
+            "latitude": number,
+            "longitude": number,
+        }
+        
+         """
     )
 
     try:
@@ -376,7 +384,6 @@ def recognize_showplace_with_nearby(
         """-  Return ONLY a single JSON object matching this schema (and nothing else):
 
         {
-          "attraction": 
             "name": string,
             "address": string,
             "latitude": number,
