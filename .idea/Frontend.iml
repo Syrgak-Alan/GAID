@@ -6,6 +6,9 @@
       <excludeFolder url="file://$MODULE_DIR$/my_first_app/.dart_tool" />
       <excludeFolder url="file://$MODULE_DIR$/my_first_app/.pub" />
       <excludeFolder url="file://$MODULE_DIR$/my_first_app/build" />
+      <excludeFolder url="file://$MODULE_DIR$/frontent_gaid/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/frontent_gaid/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/frontent_gaid/build" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
