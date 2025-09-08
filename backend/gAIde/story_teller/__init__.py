@@ -1,0 +1,1 @@
+from .generate_story_func import generate_story  # noqa: F401
