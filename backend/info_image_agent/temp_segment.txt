@@ -1,0 +1,181 @@
+def recognize_showplace(image_path: str, locale: str = "en") -> str:
+    """
+    Identify the most likely landmark/showplace in an image using Gemini 2.0 Flash.
+
+    Args:
+        image_path: Local filesystem path to the image.
+        locale: Optional BCP-47 language code for the response (default: "en").
+
+    Returns:
+        A concise string naming the most likely landmark/showplace, optionally with location.
+
+    Raises:
+        FileNotFoundError: If the image does not exist.
+        RuntimeError: If the Gemini client or request fails.
+    """
+
+    if not image_path:
+        raise ValueError("image_path is required")
+    if not os.path.isfile(image_path):
+        raise FileNotFoundError(f"Image not found: {image_path}")
+
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GOOGLE_API_KEY is not set. Add it to environment or multi_tool_agent/.env"
+        )
+
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+    except Exception as e:
+        raise RuntimeError(
+            "google-genai is required. Install with: pip install google-genai"
+        ) from e
+
+    # Create client
+    client = genai.Client(api_key=api_key)
+
+    # Read image
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
+
+    mime_type, _ = mimetypes.guess_type(image_path)
+    if mime_type is None:
+        # Default to JPEG if unknown
+        mime_type = "image/jpeg"
+
+    # Build input parts
+    try:
+        # google-genai >= 1.30 supports Part.from_bytes with keyword-only args
+        image_part = genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+    except Exception as e:
+        raise RuntimeError("Failed to create image part for Gemini request") from e
+
+    prompt = (
+        "You are a landmark recognition assistant for travelers. "
+        "Given the image, identify the most likely landmark or showplace. "
+        "Respond concisely with the landmark name and city/country if known. "
+        f"Use language: {locale}. If uncertain, provide best guess."
+    )
+
+    try:
+        # Prefer the models.generate_content path
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[prompt, image_part],
+        )
+        text: Optional[str] = getattr(response, "text", None)
+        if not text:
+            # Some SDK versions return candidates[0].content.parts[0].text
+            text = None
+            candidates = getattr(response, "candidates", None)
+            if candidates:
+                try:
+                    parts = candidates[0].content.parts
+                    if parts:
+                        text = getattr(parts[0], "text", None) or str(parts[0])
+                except Exception:
+                    pass
+        if not text:
+            text = str(response)
+        return text.strip()
+    except Exception as e:
+        raise RuntimeError(f"Gemini request failed: {e}") from e
+
+
+# Helper to load/normalize nearby places JSON structure
+def _load_nearby_places(data_or_path: Union[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    data: Dict[str, Any]
+    if isinstance(data_or_path, str):
+        if not os.path.isfile(data_or_path):
+            raise FileNotFoundError(f"Places JSON not found: {data_or_path}")
+        with open(data_or_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = data_or_path
+
+    # Expected format: { "find_places_nearby_response": { "result": [ {name, latitude, longitude, address?, distance_m?}, ... ] } }
+    results = (
+        data.get("find_places_nearby_response", {}).get("result")
+        if isinstance(data, dict)
+        else None
+    )
+    if not isinstance(results, list):
+        raise ValueError("Invalid places JSON: expected find_places_nearby_response.result list")
+
+    # Normalize and filter minimal fields
+    cleaned: List[Dict[str, Any]] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        lat = item.get("latitude")
+        lon = item.get("longitude")
+        if not name or lat is None or lon is None:
+            continue
+        cleaned.append({
+            "name": str(name),
+            "latitude": float(lat),
+            "longitude": float(lon),
+            "address": item.get("address"),
+            "distance_m": item.get("distance_m"),
+        })
+
+    # Sort by distance if present
+    cleaned.sort(key=lambda x: (float(x["distance_m"]) if x.get("distance_m") is not None else float("inf")))
+    return cleaned
+
+
+def recognize_showplace_with_nearby(
+    image_path: str,
+    places_json: Union[str, Dict[str, Any]],
+    *,
+    locale: str = "en",
+    max_places: int = 30,
+) -> str:
+    """
+    Recognize a landmark in an image with additional context of nearby showplaces
+    to disambiguate lookalikes by location (e.g., replicas).
+
+    Inputs:
+      - image_path: local path to the image file
+      - places_json: path to a JSON file or the parsed dict with schema:
+            {"find_places_nearby_response": {"result": [ {name, latitude, longitude, address?, distance_m?}, ... ]}}
+      - locale: response language (default "en")
+      - max_places: maximum number of nearby places to provide as context
+
+    Returns:
+      - String response from Gemini, ideally naming the most likely showplace among the provided nearby options,
+        and indicating reasoning/coordinates.
+    """
+
+    if not image_path:
+        raise ValueError("image_path is required")
+    if not os.path.isfile(image_path):
+        raise FileNotFoundError(f"Image not found: {image_path}")
+
+    nearby = _load_nearby_places(places_json)
+    if not nearby:
+        # Fallback to vision-only if no usable places
+        return recognize_showplace(image_path=image_path, locale=locale)
+
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GOOGLE_API_KEY is not set. Add it to environment or multi_tool_agent/.env"
+        )
+
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+    except Exception as e:
+        raise RuntimeError(
+            "google-genai is required. Install with: pip install google-genai"
+        ) from e
+
+    client = genai.Client(api_key=api_key)
+
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
+    mime_type, _ = mimetypes.guess_type(image_path)

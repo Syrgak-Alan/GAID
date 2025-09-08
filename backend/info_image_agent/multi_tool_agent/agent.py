@@ -1,0 +1,446 @@
+import os
+import sys
+import json
+import mimetypes
+import math
+from typing import Optional, Any, Dict, List, Union
+import requests
+
+# Make google.adk optional so CLI can run even if it's missing
+try:
+    from google.adk.agents import Agent as _GoogleADKAgent
+except Exception:
+    _GoogleADKAgent = None  # type: ignore[assignment]
+
+PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
+GMP_API_KEY = os.getenv("GMP_API_KEY")  
+# Best-effort .env loader without requiring python-dotenv.
+def _load_env_from_file(path: str) -> None:
+    try:
+        if not os.path.isfile(path):
+            return
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                # Do not overwrite existing env vars
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception:
+        # Non-fatal: continue without raising to avoid blocking agent import
+        pass
+
+
+_load_env_from_file(os.path.join(os.path.dirname(__file__), ".env"))
+
+# ----------------------------------------------------------------------
+
+# gaversin formula to count distance
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
+
+def get_coordinates() -> Dict[str, float]:
+    """
+    Return current GNSS coordinates.
+
+    This is a placeholder that should be implemented to return the actual
+    device or session coordinates. For now, it returns a sample location.
+    """
+    return {"latitude": 48.179169, "longitude": 11.555972}  # Example: San Francisco, CA
+
+GMP_API_KEY = os.getenv("GMP_API_KEY")  
+
+def find_places_nearby(
+    place_type: Optional[str],
+    latitude: float,
+    longitude: float,
+    radius_m: int = 150,
+    language: str = "en",
+) -> List[Dict[str, Any]]:
+    
+    print("find_places_nearby is called")
+
+    if not GMP_API_KEY:
+        return {"status": "error", "error_message": "GMP_API_KEY is not set."}
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GMP_API_KEY,
+        "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location"
+    }
+    body: Dict[str, Any] = {
+        "locationRestriction": {
+            "circle": {
+                "center": {"latitude": float(latitude), "longitude": float(longitude)},
+                "radius": float(radius_m)
+            }
+        },
+        "languageCode": language,
+        "maxResultCount": 20,
+        "rankPreference": "POPULARITY"
+    }
+    # Only include type filter if provided (null/None = no filter)
+    if place_type:
+        body["includedTypes"] = [place_type]
+    else:
+        body["includedTypes"] = "tourist_attraction"
+    try:
+        r = requests.post(PLACES_NEARBY_URL, headers=headers, json=body, timeout=15)
+    except Exception as e:
+        return {"status": "error", "error_message": f"Network error: {e!r}"}
+
+    if not r.ok:
+        print("Places API error:", r.status_code, r.text)
+        return {"status": "error", "error_message": f"Places API {r.status_code}: {r.text}"}
+
+    data = r.json()
+    places = data.get("places", []) or []
+
+    out: List[Dict[str, Any]] = []
+    for p in places:
+        loc = p.get("location") or {}
+        plat, plng = loc.get("latitude"), loc.get("longitude")
+        if plat is None or plng is None:
+            continue
+        dist = _haversine_m(float(latitude), float(longitude), float(plat), float(plng))
+        out.append({
+            "name": (p.get("displayName") or {}).get("text"),
+            "address": p.get("formattedAddress"),
+            "latitude": plat,
+            "longitude": plng,
+            "distance_m": round(dist, 1),
+        })
+
+    out.sort(key=lambda x: x["distance_m"])
+
+
+    print("find_places_nearby is executed")
+    print()
+
+    return out
+
+
+def recognize_showplace_auto(image_path: str, *, radius_m: int = 150, locale: str = "en") -> str:
+    """
+    Orchestrate the full flow using current GNSS coordinates:
+      1) get_coordinates() -> lat/lon
+      2) find_places_nearby(None, lat, lon, radius_m)
+      3) recognize_showplace_with_nearby(image_path, places)
+    Falls back to vision-only recognition if any step fails.
+    """
+    try:
+        coords = get_coordinates()
+        lat, lon = coords["latitude"], coords["longitude"]
+    except Exception:
+        return recognize_showplace(image_path, locale=locale)
+
+    try:
+        nearby_list = find_places_nearby(None, lat, lon, radius_m=radius_m, language=locale)
+        print(nearby_list)
+    except Exception:
+        print("nearby_list has an error")
+        return recognize_showplace(image_path, locale=locale)
+
+    if not nearby_list or not isinstance(nearby_list, list):
+        return recognize_showplace(image_path, locale=locale)
+
+    wrapped = {"find_places_nearby_response": {"result": nearby_list}}
+    try:
+        return recognize_showplace_with_nearby(image_path, wrapped, locale=locale)
+    except Exception:
+        return recognize_showplace(image_path, locale=locale)
+
+
+def recognize_showplace(image_path: str, locale: str = "en") -> str:
+    """
+    Identify the most likely landmark/showplace in an image using Gemini 2.0 Flash.
+
+    Args:
+        image_path: Local filesystem path to the image.
+        locale: Optional BCP-47 language code for the response (default: "en").
+
+    Returns:
+        A concise string naming the most likely landmark/showplace, optionally with location.
+
+    Raises:
+        FileNotFoundError: If the image does not exist.
+        RuntimeError: If the Gemini client or request fails.
+    """
+
+    if not image_path:
+        raise ValueError("image_path is required")
+    if not os.path.isfile(image_path):
+        raise FileNotFoundError(f"Image not found: {image_path}")
+
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GOOGLE_API_KEY is not set. Add it to environment or multi_tool_agent/.env"
+        )
+
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+    except Exception as e:
+        raise RuntimeError(
+            "google-genai is required. Install with: pip install google-genai"
+        ) from e
+
+    # Create client
+    client = genai.Client(api_key=api_key)
+
+    # Read image
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
+
+    mime_type, _ = mimetypes.guess_type(image_path)
+    if mime_type is None:
+        # Default to JPEG if unknown
+        mime_type = "image/jpeg"
+
+    # Build input parts
+    try:
+        # google-genai >= 1.30 supports Part.from_bytes with keyword-only args
+        image_part = genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+    except Exception as e:
+        raise RuntimeError("Failed to create image part for Gemini request") from e
+
+    prompt = (
+        "You are a landmark recognition assistant for travelers. "
+        "Given the image, identify the most likely landmark or showplace. "
+        "Respond concisely with the landmark name and city/country if known. "
+        f"Use language: {locale}. If uncertain, provide best guess."
+    )
+
+    try:
+        # Prefer the models.generate_content path
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[prompt, image_part],
+        )
+        text: Optional[str] = getattr(response, "text", None)
+        if not text:
+            # Some SDK versions return candidates[0].content.parts[0].text
+            text = None
+            candidates = getattr(response, "candidates", None)
+            if candidates:
+                try:
+                    parts = candidates[0].content.parts
+                    if parts:
+                        text = getattr(parts[0], "text", None) or str(parts[0])
+                except Exception:
+                    pass
+        if not text:
+            text = str(response)
+        return text.strip()
+    except Exception as e:
+        raise RuntimeError(f"Gemini request failed: {e}") from e
+
+
+# Helper to load/normalize nearby places JSON structure
+def _load_nearby_places(data_or_path: Union[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    data: Dict[str, Any]
+    if isinstance(data_or_path, str):
+        if not os.path.isfile(data_or_path):
+            raise FileNotFoundError(f"Places JSON not found: {data_or_path}")
+        with open(data_or_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = data_or_path
+
+    # Expected format: { "find_places_nearby_response": { "result": [ {name, latitude, longitude, address?, distance_m?}, ... ] } }
+    results = (
+        data.get("find_places_nearby_response", {}).get("result")
+        if isinstance(data, dict)
+        else None
+    )
+    if not isinstance(results, list):
+        raise ValueError("Invalid places JSON: expected find_places_nearby_response.result list")
+
+    # Normalize and filter minimal fields
+    cleaned: List[Dict[str, Any]] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        lat = item.get("latitude")
+        lon = item.get("longitude")
+        if not name or lat is None or lon is None:
+            continue
+        cleaned.append({
+            "name": str(name),
+            "latitude": float(lat),
+            "longitude": float(lon),
+            "address": item.get("address"),
+            "distance_m": item.get("distance_m"),
+        })
+
+    # Sort by distance if present
+    cleaned.sort(key=lambda x: (float(x["distance_m"]) if x.get("distance_m") is not None else float("inf")))
+    return cleaned
+
+
+def recognize_showplace_with_nearby(
+    image_path: str,
+    places_json: Union[str, Dict[str, Any]],
+    *,
+    locale: str = "en",
+    max_places: int = 30,
+) -> str:
+    """
+    Recognize a landmark in an image with additional context of nearby showplaces
+    to disambiguate lookalikes by location (e.g., replicas).
+
+    Inputs:
+      - image_path: local path to the image file
+      - places_json: path to a JSON file or the parsed dict with schema:
+            {"find_places_nearby_response": {"result": [ {name, latitude, longitude, address?, distance_m?}, ... ]}}
+      - locale: response language (default "en")
+      - max_places: maximum number of nearby places to provide as context
+
+    Returns:
+      - String response from Gemini, ideally naming the most likely showplace among the provided nearby options,
+        and indicating reasoning/coordinates.
+    """
+
+    if not image_path:
+        raise ValueError("image_path is required")
+    if not os.path.isfile(image_path):
+        raise FileNotFoundError(f"Image not found: {image_path}")
+
+    nearby = _load_nearby_places(places_json)
+    if not nearby:
+        # Fallback to vision-only if no usable places
+        return recognize_showplace(image_path=image_path, locale=locale)
+
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GOOGLE_API_KEY is not set. Add it to environment or multi_tool_agent/.env"
+        )
+
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+    except Exception as e:
+        raise RuntimeError(
+            "google-genai is required. Install with: pip install google-genai"
+        ) from e
+
+    client = genai.Client(api_key=api_key)
+
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
+    mime_type, _ = mimetypes.guess_type(image_path)
+    if mime_type is None:
+        mime_type = "image/jpeg"
+
+    try:
+        image_part = genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+    except Exception as e:
+        raise RuntimeError("Failed to create image part for Gemini request") from e
+
+    # Trim and serialize nearby places for context
+    nearby_trimmed = nearby[: max_places if max_places > 0 else len(nearby)]
+    nearby_json = json.dumps(nearby_trimmed, ensure_ascii=False)
+
+    system_prompt = (
+        "You are a landmark recognition assistant for travelers. "
+        "You MUST identify the landmark in the provided image, BUT when a list of nearby showplaces is provided, "
+        "you should disambiguate using those options, preferring a match from the list that best fits the image and location. "
+        "If the image looks like a famous landmark with replicas elsewhere, choose the one consistent with the provided nearby list. "
+        "Only pick from the provided nearby list when confident; otherwise provide your best vision-only guess and say you are uncertain."
+    )
+
+    task_prompt = (
+        f"Use language: {locale}.\n"
+        "Nearby showplaces (JSON, sorted by distance):\n"
+        f"{nearby_json}\n\n"
+        "Instructions:\n"
+        "- First, recognize the landmark from the image.\n"
+        "- Then, compare with the provided nearby showplaces.\n"
+        "- If one of the nearby names matches or strongly corresponds to the image, select it.\n"
+        "- If none match, respond with your best guess and note uncertainty.\n"
+        "- Respond in a single concise line: '<Landmark Name> - <City/Country if known>' and optionally a short note if disambiguation was used."
+    )
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[system_prompt, task_prompt, image_part],
+        )
+        text: Optional[str] = getattr(response, "text", None)
+        if not text:
+            candidates = getattr(response, "candidates", None)
+            if candidates:
+                try:
+                    parts = candidates[0].content.parts
+                    if parts:
+                        text = getattr(parts[0], "text", None) or str(parts[0])
+                except Exception:
+                    pass
+        if not text:
+            text = str(response)
+        return text.strip()
+    except Exception as e:
+        raise RuntimeError(f"Gemini request with nearby places failed: {e}") from e
+
+# Instantiate the agent and register the tool function so root_agent can use it.
+root_agent: Optional[Any] = None
+if _GoogleADKAgent is not None:
+    root_agent = _GoogleADKAgent(
+        name="image_recognition_agent",
+        model="gemini-2.0-flash",
+        description="An agent that can recognize landmarks/showplaces in images using Gemini API",
+        instruction=(
+            "You are an image recognition agent that identifies landmarks and showplaces in traveler photos using the Gemini API. "
+            "When given an image, first get GNSS coordinates using the get_coordinates tool, then fetch "
+            "nearby showplaces with find_places_nearby (do not filter types), and finally call "
+            "recognize_showplace_with_nearby to disambiguate by location. "
+            "If coordinates or nearby places are unavailable, fall back to vision-only recognition."
+        ),
+        tools=[
+            get_coordinates,
+            find_places_nearby,
+            recognize_showplace_with_nearby,
+            recognize_showplace,
+            recognize_showplace_auto,
+        ],
+    )
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Recognize landmark/showplace from an image using Gemini 2.0 Flash",
+    )
+    parser.add_argument("image", help="Path to the image file (jpg/png/webp/etc.)")
+    parser.add_argument("--places", help="Path to nearby showplaces JSON (exp.json format)")
+    parser.add_argument("--locale", default="en", help="Response language (e.g., en, fr, es)")
+    args = parser.parse_args()
+
+    try:
+        if args.places:
+            result = recognize_showplace_with_nearby(args.image, args.places, locale=args.locale)
+        else:
+            # Default behavior: GNSS -> Places -> Disambiguated recognition, with fallback to vision-only
+            result = recognize_showplace_auto(args.image, radius_m=150, locale=args.locale)
+        print(result)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+
