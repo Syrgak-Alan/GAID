@@ -8,11 +8,11 @@ from .research_function import generate_facts  # async def generate_facts(place,
 
 # Tool function that ADK will auto-wrap.
 # Keep it async so we don't fight event loops inside ADK.
-async def research_attraction(place: Dict[str, Any], profile: Dict[str, Any]) -> Dict[str, Any]:
+async def research_attraction(image: str, profile: Dict[str, Any]) -> Dict[str, Any]:
     """
     Return structured facts JSON for an attraction.
     Args:
-      place: Google Places-like dict (name, address, latitude, longitude, ...)
+      str: a path to an image file (local)
       profile: interests/mobility/locale dict
     """
-    return await generate_facts(place, profile)
+    return await generate_facts(image, profile)

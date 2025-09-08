@@ -25,6 +25,8 @@ async def generate_facts(
 ) -> Dict[str, Any]:
     """Run your agent once and return the JSON as a Python dict. No human prompt."""
     place = recognize_showplace_auto(image)
+    # raise NotImplementedError(f"This is the place: {place}")
+    # print("Recognized place:", place)
     agent = make_agent(place, profile)
 
     session = InMemorySessionService()

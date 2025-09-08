@@ -11,5 +11,5 @@ from gAIde.info_image_agent.multi_tool_agent.agent import recognize_showplace_au
 # place = recognize_showplace_auto("image.png", radius_m=150, locale="en")
 # print("PLACE:")
 # print(place)
-story = generate_story_sync("image.png", USER_PROFILE)  # <-- await!
+story = generate_story_sync("/Volumes/Crucial_X6/GCP_hackathon/GAID/backend/gAIde/info_image_agent/image.png", USER_PROFILE)  # <-- await!
 print(story)
