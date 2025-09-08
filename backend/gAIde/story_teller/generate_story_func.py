@@ -25,7 +25,7 @@ def _strip_code_fences(text: str) -> str:
 
 
 async def generate_story(
-    place: Dict[str, Any],
+    image: str,
     profile: Dict[str, Any],
     timeout_s: int = 90,
 ) -> str:
@@ -44,13 +44,14 @@ async def generate_story(
     runner = Runner(agent=agent, app_name=app_name, session_service=session)
 
     # Send ONLY structured inputs; the agent decides to call the tool.
-    payload = json.dumps({"place": place, "profile": profile}, ensure_ascii=False)
+    payload = json.dumps({"image": image, "profile": profile}, ensure_ascii=False)
     content = types.Content(role="user", parts=[types.Part(text=payload)])
 
     async def _run_once() -> Optional[str]:
         final_text = None
         async for ev in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
             if ev.is_final_response() and ev.content.parts:
+                print("Final response received.")
                 final_text = ev.content.parts[0].text
         return final_text
 
@@ -64,7 +65,7 @@ async def generate_story(
 
 
 def generate_story_sync(
-    place: Dict[str, Any],
+    image: str,
     profile: Dict[str, Any],
     timeout_s: int = 90,
 ) -> str:
@@ -79,7 +80,7 @@ def generate_story_sync(
         loop = asyncio.new_event_loop()
         try:
             asyncio.set_event_loop(loop)
-            result["value"] = loop.run_until_complete(generate_story(place, profile, timeout_s))
+            result["value"] = loop.run_until_complete(generate_story(image, profile, timeout_s))
         except BaseException as e:
             err["e"] = e
         finally:

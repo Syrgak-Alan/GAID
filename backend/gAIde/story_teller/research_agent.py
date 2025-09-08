@@ -13,7 +13,7 @@ from google.adk.agents import Agent
 from google.adk.tools import google_search
 
 # --- Defaults (can be overridden via env) ---
-from ..config import PLACE as DEFAULT_PLACE, USER_PROFILE as DEFAULT_USER_PROFILE
+from .config import PLACE as DEFAULT_PLACE, USER_PROFILE as DEFAULT_USER_PROFILE
 
 def _load_overrides() -> tuple[Dict[str, Any], Dict[str, Any]]:
     """Optionally override PLACE/USER_PROFILE with JSON in env vars."""

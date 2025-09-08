@@ -1,1 +1,1 @@
-from .generate_story_func import generate_story  # noqa: F401
+from .story_teller_agent import storry_teller  # noqa: F401

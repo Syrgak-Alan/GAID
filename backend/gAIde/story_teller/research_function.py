@@ -4,6 +4,7 @@ from typing import Any, Dict
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+from gAIde.info_image_agent.multi_tool_agent.agent import recognize_showplace_auto
 from .research_agent import make_agent  # your factory that bakes place/profile into instruction
 
 def _parse_loose_json(text: str) -> Dict[str, Any]:
@@ -17,10 +18,13 @@ def _parse_loose_json(text: str) -> Dict[str, Any]:
         raise ValueError("No JSON object found in final response.")
     return json.loads(s[i:j+1])
 
-async def generate_facts(place: Dict[str, Any],
-                         profile: Dict[str, Any],
-                         timeout_s: int = 90) -> Dict[str, Any]:
+async def generate_facts(
+    image: str,
+    profile: Dict[str, Any],
+    timeout_s: int = 90
+) -> Dict[str, Any]:
     """Run your agent once and return the JSON as a Python dict. No human prompt."""
+    place = recognize_showplace_auto(image)
     agent = make_agent(place, profile)
 
     session = InMemorySessionService()
