@@ -146,9 +146,16 @@ class MultimodalADKServer(BaseWebSocketServer):
                         elif data.get("type") == "end":
                             # Client is done sending audio for this turn
                             logger.info("Received end signal from client")
-                        elif data.get("type") == "text":
-                            # Handle text messages (not implemented in this simple version)
-                            logger.info(f"Received text: {data.get('data')}")
+                        elif data.get("type") in ("text", "speak_text"):
+                            # Send plain text into the live request queue so the agent can narrate it.
+                            # If you want verbatim narration, prepend a hint.
+                            txt = data.get("data", "") or ""
+                            if data.get("type") == "speak_text":
+                                txt = f"Read the following verbatim and do not add anything else: {txt}"
+                            live_request_queue.send_realtime(
+                                types.Part(text=txt)
+                            )
+                            logger.info("Forwarded text to live_request_queue for narration")
                     except json.JSONDecodeError:
                         logger.error("Invalid JSON message received")
                     except Exception as e:
