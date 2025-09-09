@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 # --- Load environment (.env in this folder or project root) ---
 load_dotenv()
-print("GOOGLE_API_KEY loaded?", bool(os.getenv("GOOGLE_API_KEY")))
+# print("GOOGLE_API_KEY loaded?", bool(os.getenv("GOOGLE_API_KEY")))
 
 # --- ADK imports (support both namespaces) ---
 from google.adk.agents import Agent

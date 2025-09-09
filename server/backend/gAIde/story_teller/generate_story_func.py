@@ -51,7 +51,6 @@ async def generate_story(
         final_text = None
         async for ev in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
             if ev.is_final_response() and ev.content.parts:
-                print("Final response received.")
                 final_text = ev.content.parts[0].text
         return final_text
 

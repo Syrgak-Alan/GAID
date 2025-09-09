@@ -69,7 +69,7 @@ def find_places_nearby(
     language: str = "en",
 ) -> List[Dict[str, Any]]:
     
-    print("find_places_nearby is called")
+    # print("find_places_nearby is called")
 
     if not GMP_API_KEY:
         return {"status": "error", "error_message": "GMP_API_KEY is not set."}
@@ -91,17 +91,17 @@ def find_places_nearby(
         "rankPreference": "POPULARITY"
     }
     # Only include type filter if provided (null/None = no filter)
-    if place_type:
-        body["includedTypes"] = [place_type]
-    else:
-        body["includedTypes"] = "tourist_attraction"
+    # if place_type:
+    #     body["includedTypes"] = [place_type]
+    # else:
+    # body["includedTypes"] = "tourist_attraction"
     try:
         r = requests.post(PLACES_NEARBY_URL, headers=headers, json=body, timeout=15)
     except Exception as e:
         return {"status": "error", "error_message": f"Network error: {e!r}"}
 
     if not r.ok:
-        print("Places API error:", r.status_code, r.text)
+        # print("Places API error:", r.status_code, r.text)
         return {"status": "error", "error_message": f"Places API {r.status_code}: {r.text}"}
 
     data = r.json()
@@ -125,13 +125,13 @@ def find_places_nearby(
     out.sort(key=lambda x: x["distance_m"])
 
 
-    print("find_places_nearby is executed")
-    print()
+    # print("find_places_nearby is executed")
+    # print()
 
     return out
 
 
-def recognize_showplace_auto(image_path: str, *, radius_m: int = 150, locale: str = "en") -> str:
+def recognize_showplace_auto(image_path: str, *,lat, lon) -> str:
     """
     Orchestrate the full flow using current GNSS coordinates:
       1) get_coordinates() -> lat/lon
@@ -139,27 +139,23 @@ def recognize_showplace_auto(image_path: str, *, radius_m: int = 150, locale: st
       3) recognize_showplace_with_nearby(image_path, places)
     Falls back to vision-only recognition if any step fails.
     """
-    try:
-        coords = get_coordinates()
-        lat, lon = coords["latitude"], coords["longitude"]
-    except Exception:
-        return recognize_showplace(image_path, locale=locale)
+    radius_m = 100
 
     try:
-        nearby_list = find_places_nearby(None, lat, lon, radius_m=radius_m, language=locale)
-        print(nearby_list)
+        nearby_list = find_places_nearby(None, lat, lon, radius_m=radius_m, language="en")
+        # print(nearby_list)
     except Exception:
         print("nearby_list has an error")
-        return recognize_showplace(image_path, locale=locale)
+        return recognize_showplace(image_path, locale="en")
 
     if not nearby_list or not isinstance(nearby_list, list):
-        return recognize_showplace(image_path, locale=locale)
+        return recognize_showplace(image_path, locale="en")
 
     wrapped = {"find_places_nearby_response": {"result": nearby_list}}
     try:
-        return recognize_showplace_with_nearby(image_path, wrapped, locale=locale)
+        return recognize_showplace_with_nearby(image_path, wrapped, locale="en")
     except Exception:
-        return recognize_showplace(image_path, locale=locale)
+        return recognize_showplace(image_path, locale="en")
 
 
 def recognize_showplace(image_path: str, locale: str = "en") -> str:
@@ -220,12 +216,19 @@ def recognize_showplace(image_path: str, locale: str = "en") -> str:
         "You are a landmark recognition assistant for travelers. "
         "Given the image, identify the most likely landmark or showplace. "
         """-  Return ONLY a single JSON object matching this schema (and nothing else):
+         - 
 
         {
             "name": string,
             "address": string,
             "latitude": number,
             "longitude": number,
+            "description" (here write a {200}-{400} word, on-the-spot story about what the visitor is seeing here.
+        Requirements:
+          • Tone: warm, specific, no fluff. No URLs or citations.
+          • Use at most 1–2 highlights and 1 nearby POI relevant to interests.
+          • If closing within 60 minutes (from facts), mention it.
+          
         }
         
          """
@@ -238,19 +241,19 @@ def recognize_showplace(image_path: str, locale: str = "en") -> str:
             contents=[prompt, image_part],
         )
         text: Optional[str] = getattr(response, "text", None)
-        if not text:
-            # Some SDK versions return candidates[0].content.parts[0].text
-            text = None
-            candidates = getattr(response, "candidates", None)
-            if candidates:
-                try:
-                    parts = candidates[0].content.parts
-                    if parts:
-                        text = getattr(parts[0], "text", None) or str(parts[0])
-                except Exception:
-                    pass
-        if not text:
-            text = str(response)
+        # if not text:
+        #     # Some SDK versions return candidates[0].content.parts[0].text
+        #     text = None
+        #     candidates = getattr(response, "candidates", None)
+        #     if candidates:
+        #         try:
+        #             parts = candidates[0].content.parts
+        #             if parts:
+        #                 text = getattr(parts[0], "text", None) or str(parts[0])
+        #         except Exception:
+        #             pass
+        # if not text:
+        #     text = str(response)
         return text.strip()
     except Exception as e:
         raise RuntimeError(f"Gemini request failed: {e}") from e
@@ -388,6 +391,11 @@ def recognize_showplace_with_nearby(
             "address": string,
             "latitude": number,
             "longitude": number,
+            "description" (here write a {200}-{400} word, on-the-spot story about what the visitor is seeing here.
+        Requirements:
+          • Tone: warm, specific, no fluff. No URLs or citations.
+          • Use at most 1–2 highlights and 1 nearby POI relevant to interests.
+          • If closing within 60 minutes (from facts), mention it.
         }
         
          """
@@ -400,17 +408,17 @@ def recognize_showplace_with_nearby(
             contents=[system_prompt, task_prompt, image_part],
         )
         text: Optional[str] = getattr(response, "text", None)
-        if not text:
-            candidates = getattr(response, "candidates", None)
-            if candidates:
-                try:
-                    parts = candidates[0].content.parts
-                    if parts:
-                        text = getattr(parts[0], "text", None) or str(parts[0])
-                except Exception:
-                    pass
-        if not text:
-            text = str(response)
+        # if not text:
+        #     candidates = getattr(response, "candidates", None)
+        #     if candidates:
+        #         try:
+        #             parts = candidates[0].content.parts
+        #             if parts:
+        #                 text = getattr(parts[0], "text", None) or str(parts[0])
+        #         except Exception:
+        #             pass
+        # if not text:
+        #     text = str(response)
         return text.strip()
     except Exception as e:
         raise RuntimeError(f"Gemini request with nearby places failed: {e}") from e
@@ -439,27 +447,27 @@ if _GoogleADKAgent is not None:
     )
 
 
-if __name__ == "__main__":
-    import argparse
+# if __name__ == "__main__":
+#     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Recognize landmark/showplace from an image using Gemini 2.0 Flash",
-    )
-    parser.add_argument("image", help="Path to the image file (jpg/png/webp/etc.)")
-    parser.add_argument("--places", help="Path to nearby showplaces JSON (exp.json format)")
-    parser.add_argument("--locale", default="en", help="Response language (e.g., en, fr, es)")
-    args = parser.parse_args()
+#     parser = argparse.ArgumentParser(
+#         description="Recognize landmark/showplace from an image using Gemini 2.0 Flash",
+#     )
+#     parser.add_argument("image", help="Path to the image file (jpg/png/webp/etc.)")
+#     parser.add_argument("--places", help="Path to nearby showplaces JSON (exp.json format)")
+#     parser.add_argument("--locale", default="en", help="Response language (e.g., en, fr, es)")
+#     args = parser.parse_args()
 
-    try:
-        if args.places:
-            result = recognize_showplace_with_nearby(args.image, args.places, locale=args.locale)
-        else:
-            # Default behavior: GNSS -> Places -> Disambiguated recognition, with fallback to vision-only
-            result = recognize_showplace_auto(args.image, radius_m=150, locale=args.locale)
-        print(result)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+#     try:
+#         if args.places:
+#             result = recognize_showplace_with_nearby(args.image, args.places, locale=args.locale)
+#         else:
+#             # Default behavior: GNSS -> Places -> Disambiguated recognition, with fallback to vision-only
+#             result = recognize_showplace_auto(args.image, radius_m=150, locale=args.locale)
+#         print(result)
+#     except Exception as e:
+#         print(f"Error: {e}", file=sys.stderr)
+#         sys.exit(1)
 
 
 
