@@ -43,7 +43,7 @@ async def speak_via_live_api(text: str, ws_url: str = "ws://localhost:8765") -> 
 
 # Generate story text
 story = generate_story_sync(
-    "/Volumes/Crucial_X6/GCP_hackathon/GAID/backend/image.png",
+    "/Users/emir/Desktop/rrr/GAID/server/backend/alte_pinakothek.jpg",
     USER_PROFILE
 )
 print(story)

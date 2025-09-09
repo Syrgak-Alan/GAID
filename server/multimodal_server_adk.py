@@ -17,7 +17,8 @@ from google.adk.tools.retrieval.vertex_ai_rag_retrieval import VertexAiRagRetrie
 from vertexai.preview import rag
 
 
-from run_test import generate_story_sync, USER_PROFILE
+from backend.gAIde.story_teller.generate_story_func import generate_story_sync
+from backend.gAIde.story_teller.config import PLACE, USER_PROFILE
 
 
 load_dotenv()

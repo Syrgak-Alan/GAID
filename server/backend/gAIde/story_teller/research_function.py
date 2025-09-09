@@ -4,7 +4,7 @@ from typing import Any, Dict
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
-from gAIde.info_image_agent.agent import recognize_showplace_auto
+from .info_image_agent.agent import recognize_showplace_auto
 from .research_agent import make_agent  # your factory that bakes place/profile into instruction
 
 def _parse_loose_json(text: str) -> Dict[str, Any]:
