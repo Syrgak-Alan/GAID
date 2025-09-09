@@ -68,7 +68,7 @@ def order_status_tool(order_id: str):
 
 def describe_place():
     return generate_story_sync(
-        "/Volumes/Crucial_X6/GCP_hackathon/GAID/backend/image.png",
+        "/Users/felix/Programmieren/Privat/Hackathon/GoogleCloud092025/Frontend/server/backend/alte_pinakothek.jpg",
         USER_PROFILE
     )
 
