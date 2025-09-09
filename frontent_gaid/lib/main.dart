@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'audio_streaming_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -34,11 +36,19 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   CameraController? _controller;
   bool _isInitialized = false;
+  bool _isRecording = false;  // Add this
+  late AudioStreamingService _audioService;
 
   @override
   void initState() {
     super.initState();
+    _audioService = AudioStreamingService();  // Initialize service
+    _initPermissions();
     _initCamera();
+  }
+
+  _initPermissions() async {
+    await Permission.microphone.request();
   }
 
   _initCamera() async {
@@ -62,9 +72,22 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  void _toggleRecording() async {
+    setState(() {
+      _isRecording = !_isRecording;
+    });
+
+    if (_isRecording) {
+      await _audioService.startStreaming();
+    } else {
+      await _audioService.stopStreaming();
+    }
+  }
+
   @override
   void dispose() {
     _controller?.dispose();
+    _audioService.dispose();  // Clean up
     super.dispose();
   }
 
@@ -91,15 +114,12 @@ class _MyHomePageState extends State<MyHomePage> {
             child: Container(
               width: 70,
               height: 70,
-              decoration: const BoxDecoration(
-                color: Colors.red,
+              decoration: BoxDecoration(
+                color: _isRecording ? Colors.red : Colors.green,
                 shape: BoxShape.circle,
               ),
               child: IconButton(
-                onPressed: () {
-                  // Add your recording logic here
-                  print('Microphone button pressed');
-                },
+                onPressed: _toggleRecording,
                 icon: const Icon(
                   Icons.mic,
                   color: Colors.white,
