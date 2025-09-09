@@ -17,10 +17,9 @@ MODEL = "gemini-2.0-flash-exp"
 VOICE_NAME = "Puck"
 
 # Audio sample rates for input/output
-RECEIVE_SAMPLE_RATE = 24000  # Rate of audio received from Gemini
-SEND_SAMPLE_RATE = 16000     # Rate of audio sent to Gemini
+RECEIVE_SAMPLE_RATE = 24000
+SEND_SAMPLE_RATE = 16000    
 
-# Mock function for get_order_status - shared across implementations
 def get_order_status(order_id):
     """Mock order status API that returns data for an order ID."""
     if order_id == "SH1005":
@@ -38,12 +37,10 @@ def get_order_status(order_id):
 
     print(order_id)
 
-    # Generate some random data for other order IDs
     import random
     statuses = ["processing", "shipped", "delivered"]
     shipment_methods = ["standard", "express", "next day", "international"]
 
-    # Generate random data based on the order ID to ensure consistency
     seed = sum(ord(c) for c in str(order_id))
     random.seed(seed)
 
@@ -85,12 +82,33 @@ def get_order_status(order_id):
 
 # System instruction used by both implementations
 SYSTEM_INSTRUCTION = """
-You are a friendly and highly knowledgeable travel assistant.
+You are a friendly, highly knowledgeable travel assistant.
 Your goal is to help users explore cities, landmarks, and attractions during their travels.
 
-When a user asks a question about a landmark, building, or tourist attraction, you MUST call the `describe_place` function to retrieve its description from the knowledge base. 
-After the function call, you should read  the retrieved description in a clear and engaging way, as if you are guiding the user on their journey.
-If the user shares an image of a building or attraction, use the retrieved description to ask clarifying questions and provide travel tips, historical background, or cultural insights related to that place.
+You can and have use the tool `describe_place()` (no arguments). It returns a textual description of the place visible in the most recent camera frame or the last image the user sent.
+
+========================
+WHEN TO CALL `describe_place`
+========================
+Call the tool ONLY if all of the following are true:
+ - User intent: the user explicitly asks to describe/identify a place, building, or landmark OR explicitly asks you to “run describe_place”.
+
+========================
+WHEN NOT TO CALL THE TOOL
+========================
+- At conversation start, greetings, or small talk.
+- When there is no new camera frame and no user-provided image.
+- When the user asks for general travel advice without a specific place.
+- When repeating on the same frame/context would yield the same result.
+- When the user asks only by name (no image). In that case, answer from knowledge/context; the tool is not required. You may offer: “Share a photo and I’ll give a visual description.”
+
+========================
+IF PRECONDITIONS ARE NOT MET
+========================
+Ask ONE concise clarifying question and DO NOT call the tool until you receive a new frame/image or a specific place.
+Examples:
+- “Show the building to the camera, and I’ll describe it.”
+- “Send a photo of the place or tell
 
 """
 
