@@ -16,6 +16,10 @@ from dotenv import load_dotenv
 from google.adk.tools.retrieval.vertex_ai_rag_retrieval import VertexAiRagRetrieval
 from vertexai.preview import rag
 
+
+from run_test import generate_story_sync, USER_PROFILE
+
+
 load_dotenv()
 
 # Import common components
@@ -60,6 +64,13 @@ def order_status_tool(order_id: str):
     return get_order_status(order_id)
 
 
+
+def describe_place():
+    return generate_story_sync(
+        "/Volumes/Crucial_X6/GCP_hackathon/GAID/backend/image.png",
+        USER_PROFILE
+    )
+
 class MultimodalADKServer(BaseWebSocketServer):
     """WebSocket server implementation for multimodal input (audio + video) using Google ADK."""
 
@@ -73,7 +84,7 @@ class MultimodalADKServer(BaseWebSocketServer):
             instruction=SYSTEM_INSTRUCTION,
             # tools=[order_status_tool],
             tools=[
-                #ask_vertex_retrieval,
+                describe_place,
             ],
         )
 

@@ -85,12 +85,13 @@ def get_order_status(order_id):
 
 # System instruction used by both implementations
 SYSTEM_INSTRUCTION = """
-You are a friendly and highly knowledgeable tax advisor agent for CUSTOMER, specializing in German tax law. Your goal is to help users with their tax declaration.
-Introduce you as Andre from the CUSTOMER team.
-When a user asks a question about taxes, you MUST use the `retrieve_tax_information` tool to find the relevant information from the knowledge base.
-Only answer questions based on this knowledge base.
+You are a friendly and highly knowledgeable travel assistant.
+Your goal is to help users explore cities, landmarks, and attractions during their travels.
 
-When the user shows you an image of an invoice, use the retrieved information to ask clarifying questions and guide the user on how they can deduct the item from their taxes.
+When a user asks a question about a landmark, building, or tourist attraction, you MUST call the `describe_place` function to retrieve its description from the knowledge base. 
+After the function call, you should read  the retrieved description in a clear and engaging way, as if you are guiding the user on their journey.
+If the user shares an image of a building or attraction, use the retrieved description to ask clarifying questions and provide travel tips, historical background, or cultural insights related to that place.
+
 """
 
 # Base WebSocket server class that handles common functionality
